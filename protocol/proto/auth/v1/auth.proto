@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package circlelink.auth.v1;
+
+option go_package = "github.com/circle-link/circle-link/protocol/gen/go/auth/v1;authv1";
+
+import "common/v1/common.proto";
+
+message SignUpRequest {
+  string email = 1;
+  string password = 2;
+  string display_name = 3;
+}
+
+message SignUpResponse {
+  string user_id = 1;
+  bool email_verification_required = 2;
+}
+
+message VerifyEmailRequest {
+  string email = 1;
+  string verification_token = 2;
+}
+
+message VerifyEmailResponse {
+  bool verified = 1;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string user_id = 1;
+  string access_token = 2;
+  string refresh_token = 3;
+  uint64 expires_at_unix = 4;
+}
+
+message RefreshSessionRequest {
+  string refresh_token = 1;
+}
+
+message RefreshSessionResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  uint64 expires_at_unix = 3;
+}
+
+message LogoutRequest {
+  string refresh_token = 1;
+}
+
+message LogoutResponse {
+  bool success = 1;
+}
+
+message ChangePasswordRequest {
+  string current_password = 1;
+  string new_password = 2;
+}
+
+message ChangePasswordResponse {
+  bool success = 1;
+}
+
+message DeviceKeyBundle {
+  string identity_key_public = 1;
+  string signed_prekey_public = 2;
+  string signed_prekey_signature = 3;
+  uint32 signed_prekey_version = 4;
+  repeated string one_time_prekeys = 5;
+}
+
+message RegisterDeviceRequest {
+  string device_name = 1;
+  circlelink.common.v1.DevicePlatform platform = 2;
+  string push_token = 3;
+  DeviceKeyBundle key_bundle = 4;
+}
+
+message RegisterDeviceResponse {
+  string device_id = 1;
+  uint64 registered_at_unix = 2;
+}
+
+message PrekeyBundleRequest {
+  string target_user_id = 1;
+  string target_device_id = 2;
+}
+
+message PrekeyBundleResponse {
+  string user_id = 1;
+  string device_id = 2;
+  string identity_key_public = 3;
+  string signed_prekey_public = 4;
+  string signed_prekey_signature = 5;
+  uint32 signed_prekey_version = 6;
+  string one_time_prekey = 7;
+}

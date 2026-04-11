@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package circlelink.common.v1;
+
+option go_package = "github.com/circle-link/circle-link/protocol/gen/go/common/v1;commonv1";
+
+enum DevicePlatform {
+  DEVICE_PLATFORM_UNSPECIFIED = 0;
+  DEVICE_PLATFORM_IOS = 1;
+  DEVICE_PLATFORM_MACOS = 2;
+  DEVICE_PLATFORM_ANDROID = 3;
+}
+
+enum AckStatus {
+  ACK_STATUS_UNSPECIFIED = 0;
+  ACK_STATUS_ACCEPTED = 1;
+  ACK_STATUS_DELIVERED = 2;
+  ACK_STATUS_READ = 3;
+  ACK_STATUS_FAILED = 4;
+}
+
+enum RetentionMode {
+  RETENTION_MODE_UNSPECIFIED = 0;
+  RETENTION_MODE_PERSISTENT = 1;
+  RETENTION_MODE_DISAPPEARING = 2;
+}
+
+message ErrorDetail {
+  string code = 1;
+  string message = 2;
+}
