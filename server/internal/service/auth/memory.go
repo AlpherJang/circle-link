@@ -227,6 +227,30 @@ func (s *MemoryService) DebugVerificationToken(_ context.Context, email string) 
 	return token, ok
 }
 
+func (s *MemoryService) GetUser(_ context.Context, userID string) (domain.User, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	user, ok := s.usersByID[userID]
+	if !ok {
+		return domain.User{}, ErrUserNotFound
+	}
+
+	return user, nil
+}
+
+func (s *MemoryService) FindUserByEmail(_ context.Context, email string) (domain.User, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	userID, ok := s.userIDByEmail[normalizeEmail(email)]
+	if !ok {
+		return domain.User{}, ErrUserNotFound
+	}
+
+	return s.usersByID[userID], nil
+}
+
 func (s *MemoryService) issueSessionLocked(userID string) LoginResult {
 	now := time.Now().UTC()
 	accessToken := ids.Token("acc")

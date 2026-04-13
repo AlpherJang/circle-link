@@ -58,8 +58,25 @@ func bearerToken(r *http.Request) string {
 	return strings.TrimSpace(strings.TrimPrefix(raw, "Bearer "))
 }
 
+func bearerTokenFromRequestOrQuery(r *http.Request) string {
+	if token := bearerToken(r); token != "" {
+		return token
+	}
+
+	return strings.TrimSpace(r.URL.Query().Get("access_token"))
+}
+
 func (s *Server) requireAccessSession(w http.ResponseWriter, r *http.Request) (authContext, bool) {
 	token := bearerToken(r)
+	return s.requireAccessSessionWithToken(w, token, r)
+}
+
+func (s *Server) requireAccessSessionFromRequestOrQuery(w http.ResponseWriter, r *http.Request) (authContext, bool) {
+	token := bearerTokenFromRequestOrQuery(r)
+	return s.requireAccessSessionWithToken(w, token, r)
+}
+
+func (s *Server) requireAccessSessionWithToken(w http.ResponseWriter, token string, r *http.Request) (authContext, bool) {
 	if token == "" {
 		writeError(w, http.StatusUnauthorized, "AUTH_UNAUTHORIZED", "Missing bearer access token.")
 		return authContext{}, false

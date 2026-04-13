@@ -136,3 +136,25 @@ type DeliveryAck struct {
 	AckedAt           time.Time
 	FromMailbox       bool
 }
+
+type DebugMessage struct {
+	ID                string
+	ConversationID    string
+	SenderUserID      string
+	SenderDeviceID    string
+	SenderEmail       string
+	RecipientUserID   string
+	RecipientDeviceID string
+	RecipientEmail    string
+	ContentType       string
+	ClientMessageSeq  uint64
+	Header            map[string]any
+	RatchetPublicKey  string
+	Ciphertext        string
+	Body              string
+	DeliveryStatus    DeliveryStatus
+	StoredAt          time.Time
+	DeliveredAt       *time.Time
+	ReadAt            *time.Time
+	SentAt            time.Time
+}

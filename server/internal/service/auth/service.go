@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"time"
+
+	"github.com/circle-link/circle-link/server/internal/domain"
 )
 
 type SignUpInput struct {
@@ -66,4 +68,6 @@ type Service interface {
 	Logout(ctx context.Context, input LogoutInput) error
 	ChangePassword(ctx context.Context, input ChangePasswordInput) error
 	AuthenticateAccessToken(ctx context.Context, accessToken string) (AccessSession, error)
+	GetUser(ctx context.Context, userID string) (domain.User, error)
+	FindUserByEmail(ctx context.Context, email string) (domain.User, error)
 }
