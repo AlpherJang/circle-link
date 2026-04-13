@@ -114,6 +114,50 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleListConversations(w http.ResponseWriter, r *http.Request) {
+	session, ok := s.requireAccessSession(w, r)
+	if !ok {
+		return
+	}
+
+	items, err := s.messageService.ListConversations(r.Context(), session.UserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to load conversations.")
+		return
+	}
+
+	result := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		peerDisplayName := item.PeerDisplayName
+		if item.PeerUserID != "" {
+			peer, err := s.authService.GetUser(r.Context(), item.PeerUserID)
+			if err == nil && peer.DisplayName != "" {
+				peerDisplayName = peer.DisplayName
+			}
+		}
+		if peerDisplayName == "" {
+			peerDisplayName = item.PeerEmail
+		}
+
+		result = append(result, map[string]any{
+			"conversationId":       item.ConversationID,
+			"lastMessageId":        item.LastMessageID,
+			"peerUserId":           item.PeerUserID,
+			"peerEmail":            item.PeerEmail,
+			"peerDisplayName":      peerDisplayName,
+			"lastMessagePreview":   item.LastMessagePreview,
+			"lastMessageAt":        item.LastMessageAt.UTC().Format(time.RFC3339),
+			"unreadCount":          item.UnreadCount,
+			"messageCount":         item.MessageCount,
+			"latestDeliveryStatus": item.LatestDeliveryStatus,
+		})
+	}
+
+	writeData(w, http.StatusOK, map[string]any{
+		"items": result,
+	})
+}
+
 func (s *Server) handleMessageStream(w http.ResponseWriter, r *http.Request) {
 	session, ok := s.requireAccessSessionFromRequestOrQuery(w, r)
 	if !ok {

@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ type MemoryService struct {
 	mu                sync.RWMutex
 	messageByID       map[string]domain.DebugMessage
 	inboxIDsByUserID  map[string][]string
+	messageIDsByUser  map[string][]string
 	subscribersByUser map[string]map[int]subscriber
 	nextSubscriberID  int
 }
@@ -29,6 +31,7 @@ func NewMemoryService() *MemoryService {
 	return &MemoryService{
 		messageByID:       make(map[string]domain.DebugMessage),
 		inboxIDsByUserID:  make(map[string][]string),
+		messageIDsByUser:  make(map[string][]string),
 		subscribersByUser: make(map[string]map[int]subscriber),
 	}
 }
@@ -76,6 +79,10 @@ func (s *MemoryService) Send(_ context.Context, input SendInput) (domain.DebugMe
 	s.mu.Lock()
 	s.messageByID[message.ID] = message
 	s.inboxIDsByUserID[input.RecipientUserID] = append(s.inboxIDsByUserID[input.RecipientUserID], message.ID)
+	s.messageIDsByUser[input.SenderUserID] = append(s.messageIDsByUser[input.SenderUserID], message.ID)
+	if input.RecipientUserID != input.SenderUserID {
+		s.messageIDsByUser[input.RecipientUserID] = append(s.messageIDsByUser[input.RecipientUserID], message.ID)
+	}
 	subscribers := s.copySubscribersLocked(input.RecipientUserID)
 	s.mu.Unlock()
 
@@ -109,6 +116,72 @@ func (s *MemoryService) ListInbox(_ context.Context, recipientUserID, recipientD
 		result = append(result, cloneMessage(item))
 	}
 
+	return result, nil
+}
+
+func (s *MemoryService) ListConversations(_ context.Context, userID string) ([]domain.ConversationSummary, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	messageIDs := s.messageIDsByUser[userID]
+	byConversation := make(map[string]domain.ConversationSummary)
+	for _, messageID := range messageIDs {
+		item, ok := s.messageByID[messageID]
+		if !ok {
+			continue
+		}
+
+		peerUserID := item.SenderUserID
+		peerEmail := item.SenderEmail
+		if item.SenderUserID == userID {
+			peerUserID = item.RecipientUserID
+			peerEmail = item.RecipientEmail
+		}
+		preview := item.Body
+		if preview == "" {
+			preview = "[encrypted payload]"
+		}
+
+		summary, exists := byConversation[item.ConversationID]
+		if !exists {
+			byConversation[item.ConversationID] = domain.ConversationSummary{
+				ConversationID:       item.ConversationID,
+				LastMessageID:        item.ID,
+				PeerUserID:           peerUserID,
+				PeerEmail:            peerEmail,
+				LastMessagePreview:   preview,
+				LastMessageAt:        item.SentAt,
+				MessageCount:         1,
+				UnreadCount:          unreadCountForMessage(item, userID),
+				LatestDeliveryStatus: item.DeliveryStatus,
+			}
+			continue
+		}
+
+		summary.MessageCount++
+		summary.UnreadCount += unreadCountForMessage(item, userID)
+		if item.SentAt.After(summary.LastMessageAt) {
+			summary.LastMessageID = item.ID
+			summary.LastMessageAt = item.SentAt
+			summary.LastMessagePreview = preview
+			summary.LatestDeliveryStatus = item.DeliveryStatus
+			if peerUserID != "" {
+				summary.PeerUserID = peerUserID
+			}
+			if peerEmail != "" {
+				summary.PeerEmail = peerEmail
+			}
+		}
+		byConversation[item.ConversationID] = summary
+	}
+
+	result := make([]domain.ConversationSummary, 0, len(byConversation))
+	for _, summary := range byConversation {
+		result = append(result, summary)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].LastMessageAt.After(result[j].LastMessageAt)
+	})
 	return result, nil
 }
 
@@ -233,4 +306,14 @@ func cloneHeader(header map[string]any) map[string]any {
 	}
 
 	return cloned
+}
+
+func unreadCountForMessage(item domain.DebugMessage, userID string) int {
+	if item.SenderUserID == userID {
+		return 0
+	}
+	if item.DeliveryStatus == domain.DeliveryStatusRead {
+		return 0
+	}
+	return 1
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/circle-link/circle-link/server/internal/service/auth"
+	"github.com/circle-link/circle-link/server/internal/service/contact"
 	"github.com/circle-link/circle-link/server/internal/service/device"
 	"github.com/circle-link/circle-link/server/internal/service/message"
 	"golang.org/x/net/websocket"
@@ -19,13 +20,14 @@ import (
 
 func TestWebSocketRelayFlow(t *testing.T) {
 	authService := auth.NewMemoryService()
+	contactService := contact.NewMemoryService()
 	deviceService := device.NewMemoryService()
 	messageService := message.NewMemoryService()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Skipf("websocket integration test requires local listen support: %v", err)
 	}
-	server := httptest.NewUnstartedServer(NewRouterWithServices(authService, deviceService, messageService))
+	server := httptest.NewUnstartedServer(NewRouterWithServices(authService, contactService, deviceService, messageService))
 	server.Listener = listener
 	server.Start()
 	defer server.Close()
@@ -146,13 +148,14 @@ func TestWebSocketRelayFlow(t *testing.T) {
 
 func TestWebSocketRelayTargetsSpecificRecipientDevice(t *testing.T) {
 	authService := auth.NewMemoryService()
+	contactService := contact.NewMemoryService()
 	deviceService := device.NewMemoryService()
 	messageService := message.NewMemoryService()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Skipf("websocket integration test requires local listen support: %v", err)
 	}
-	server := httptest.NewUnstartedServer(NewRouterWithServices(authService, deviceService, messageService))
+	server := httptest.NewUnstartedServer(NewRouterWithServices(authService, contactService, deviceService, messageService))
 	server.Listener = listener
 	server.Start()
 	defer server.Close()

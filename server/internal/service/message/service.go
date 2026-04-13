@@ -34,6 +34,7 @@ type AcknowledgeInput struct {
 type Service interface {
 	Send(ctx context.Context, input SendInput) (domain.DebugMessage, error)
 	ListInbox(ctx context.Context, recipientUserID, recipientDeviceID string) ([]domain.DebugMessage, error)
+	ListConversations(ctx context.Context, userID string) ([]domain.ConversationSummary, error)
 	SubscribeInbox(ctx context.Context, recipientUserID, recipientDeviceID string) (<-chan domain.DebugMessage, func())
 	Acknowledge(ctx context.Context, input AcknowledgeInput) (domain.DebugMessage, error)
 }

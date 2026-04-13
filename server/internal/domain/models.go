@@ -86,10 +86,25 @@ type AuthSession struct {
 }
 
 type Contact struct {
-	OwnerUserID string
-	PeerUserID  string
-	State       ContactState
-	CreatedAt   time.Time
+	OwnerUserID     string
+	PeerUserID      string
+	State           ContactState
+	InvitedByUserID string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type ConversationSummary struct {
+	ConversationID       string
+	LastMessageID        string
+	PeerUserID           string
+	PeerEmail            string
+	PeerDisplayName      string
+	LastMessagePreview   string
+	LastMessageAt        time.Time
+	UnreadCount          int
+	MessageCount         int
+	LatestDeliveryStatus DeliveryStatus
 }
 
 type MessageEnvelope struct {

@@ -8,15 +8,17 @@ import (
 	"testing"
 
 	"github.com/circle-link/circle-link/server/internal/service/auth"
+	"github.com/circle-link/circle-link/server/internal/service/contact"
 	"github.com/circle-link/circle-link/server/internal/service/device"
 	"github.com/circle-link/circle-link/server/internal/service/message"
 )
 
 func TestAuthDeviceAndMessageFlow(t *testing.T) {
 	authService := auth.NewMemoryService()
+	contactService := contact.NewMemoryService()
 	deviceService := device.NewMemoryService()
 	messageService := message.NewMemoryService()
-	router := NewRouterWithServices(authService, deviceService, messageService)
+	router := NewRouterWithServices(authService, contactService, deviceService, messageService)
 
 	aliceEmail := "alice@example.com"
 	alicePassword := "strong-pass"
@@ -64,6 +66,152 @@ func TestAuthDeviceAndMessageFlow(t *testing.T) {
 	}
 	if item["senderEmail"] != aliceEmail {
 		t.Fatalf("expected sender email %q, got %#v", aliceEmail, item["senderEmail"])
+	}
+
+	aliceConversationsResp := doJSONRequest(t, router, http.MethodGet, "/v1/conversations", aliceToken, nil)
+	if aliceConversationsResp.Code != http.StatusOK {
+		t.Fatalf("expected alice conversations status 200, got %d", aliceConversationsResp.Code)
+	}
+	aliceConversationItems := decodeEnvelope(t, aliceConversationsResp)["data"].(map[string]any)["items"].([]any)
+	if len(aliceConversationItems) != 1 {
+		t.Fatalf("expected 1 alice conversation, got %d", len(aliceConversationItems))
+	}
+	aliceConversation := aliceConversationItems[0].(map[string]any)
+	if aliceConversation["peerEmail"] != bobEmail {
+		t.Fatalf("expected alice conversation peer bob@example.com, got %#v", aliceConversation["peerEmail"])
+	}
+	if aliceConversation["messageCount"] != float64(1) {
+		t.Fatalf("expected alice conversation messageCount 1, got %#v", aliceConversation["messageCount"])
+	}
+
+	bobConversationsResp := doJSONRequest(t, router, http.MethodGet, "/v1/conversations", bobToken, nil)
+	if bobConversationsResp.Code != http.StatusOK {
+		t.Fatalf("expected bob conversations status 200, got %d", bobConversationsResp.Code)
+	}
+	bobConversationItems := decodeEnvelope(t, bobConversationsResp)["data"].(map[string]any)["items"].([]any)
+	if len(bobConversationItems) != 1 {
+		t.Fatalf("expected 1 bob conversation, got %d", len(bobConversationItems))
+	}
+	bobConversation := bobConversationItems[0].(map[string]any)
+	if bobConversation["peerEmail"] != aliceEmail {
+		t.Fatalf("expected bob conversation peer alice@example.com, got %#v", bobConversation["peerEmail"])
+	}
+	if bobConversation["unreadCount"] != float64(1) {
+		t.Fatalf("expected bob conversation unreadCount 1, got %#v", bobConversation["unreadCount"])
+	}
+}
+
+func TestContactInviteAndListFlow(t *testing.T) {
+	authService := auth.NewMemoryService()
+	contactService := contact.NewMemoryService()
+	deviceService := device.NewMemoryService()
+	messageService := message.NewMemoryService()
+	router := NewRouterWithServices(authService, contactService, deviceService, messageService)
+
+	aliceToken := signUpAndVerify(t, router, "alice@example.com", "strong-pass", "Alice")
+	bobToken := signUpAndVerify(t, router, "bob@example.com", "strong-pass", "Bob")
+
+	inviteResp := doJSONRequest(t, router, http.MethodPost, "/v1/contacts/invite", aliceToken, map[string]any{
+		"peerEmail": "bob@example.com",
+	})
+	if inviteResp.Code != http.StatusCreated {
+		t.Fatalf("expected invite status 201, got %d", inviteResp.Code)
+	}
+
+	listResp := doJSONRequest(t, router, http.MethodGet, "/v1/contacts", aliceToken, nil)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected contact list status 200, got %d", listResp.Code)
+	}
+
+	payload := decodeEnvelope(t, listResp)
+	data := payload["data"].(map[string]any)
+	items := data["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 contact item, got %d", len(items))
+	}
+
+	item := items[0].(map[string]any)
+	if item["peerEmail"] != "bob@example.com" {
+		t.Fatalf("expected contact peerEmail bob@example.com, got %#v", item["peerEmail"])
+	}
+	if item["state"] != "pending" {
+		t.Fatalf("expected contact state pending, got %#v", item["state"])
+	}
+	if item["direction"] != "outgoing" {
+		t.Fatalf("expected contact direction outgoing, got %#v", item["direction"])
+	}
+
+	bobListResp := doJSONRequest(t, router, http.MethodGet, "/v1/contacts", bobToken, nil)
+	if bobListResp.Code != http.StatusOK {
+		t.Fatalf("expected bob contact list status 200, got %d", bobListResp.Code)
+	}
+
+	bobPayload := decodeEnvelope(t, bobListResp)
+	bobItems := bobPayload["data"].(map[string]any)["items"].([]any)
+	if len(bobItems) != 1 {
+		t.Fatalf("expected 1 bob contact item, got %d", len(bobItems))
+	}
+	bobItem := bobItems[0].(map[string]any)
+	if bobItem["direction"] != "incoming" {
+		t.Fatalf("expected bob contact direction incoming, got %#v", bobItem["direction"])
+	}
+	if bobItem["canAccept"] != true {
+		t.Fatalf("expected bob contact canAccept true, got %#v", bobItem["canAccept"])
+	}
+}
+
+func TestContactAcceptAndRejectFlow(t *testing.T) {
+	authService := auth.NewMemoryService()
+	contactService := contact.NewMemoryService()
+	deviceService := device.NewMemoryService()
+	messageService := message.NewMemoryService()
+	router := NewRouterWithServices(authService, contactService, deviceService, messageService)
+
+	aliceToken := signUpAndVerify(t, router, "alice@example.com", "strong-pass", "Alice")
+	bobToken := signUpAndVerify(t, router, "bob@example.com", "strong-pass", "Bob")
+	charlieToken := signUpAndVerify(t, router, "charlie@example.com", "strong-pass", "Charlie")
+
+	inviteResp := doJSONRequest(t, router, http.MethodPost, "/v1/contacts/invite", aliceToken, map[string]any{
+		"peerEmail": "bob@example.com",
+	})
+	if inviteResp.Code != http.StatusCreated {
+		t.Fatalf("expected invite status 201, got %d", inviteResp.Code)
+	}
+	bobPendingListResp := doJSONRequest(t, router, http.MethodGet, "/v1/contacts", bobToken, nil)
+	bobPendingItems := decodeEnvelope(t, bobPendingListResp)["data"].(map[string]any)["items"].([]any)
+	alicePeerUserID := bobPendingItems[0].(map[string]any)["peerUserId"].(string)
+
+	acceptResp := doJSONRequest(t, router, http.MethodPost, "/v1/contacts/"+alicePeerUserID+"/accept", bobToken, nil)
+	if acceptResp.Code != http.StatusOK {
+		t.Fatalf("expected accept status 200, got %d", acceptResp.Code)
+	}
+	acceptData := decodeEnvelope(t, acceptResp)["data"].(map[string]any)
+	if acceptData["state"] != "accepted" {
+		t.Fatalf("expected accepted state, got %#v", acceptData["state"])
+	}
+	if acceptData["direction"] != "accepted" {
+		t.Fatalf("expected accepted direction, got %#v", acceptData["direction"])
+	}
+
+	secondInviteResp := doJSONRequest(t, router, http.MethodPost, "/v1/contacts/invite", aliceToken, map[string]any{
+		"peerEmail": "charlie@example.com",
+	})
+	if secondInviteResp.Code != http.StatusCreated {
+		t.Fatalf("expected second invite status 201, got %d", secondInviteResp.Code)
+	}
+	charliePendingListResp := doJSONRequest(t, router, http.MethodGet, "/v1/contacts", charlieToken, nil)
+	charliePendingItems := decodeEnvelope(t, charliePendingListResp)["data"].(map[string]any)["items"].([]any)
+	aliceToCharliePeerUserID := charliePendingItems[0].(map[string]any)["peerUserId"].(string)
+
+	rejectResp := doJSONRequest(t, router, http.MethodPost, "/v1/contacts/"+aliceToCharliePeerUserID+"/reject", charlieToken, nil)
+	if rejectResp.Code != http.StatusOK {
+		t.Fatalf("expected reject status 200, got %d", rejectResp.Code)
+	}
+
+	charlieListResp := doJSONRequest(t, router, http.MethodGet, "/v1/contacts", charlieToken, nil)
+	charlieItems := decodeEnvelope(t, charlieListResp)["data"].(map[string]any)["items"].([]any)
+	if len(charlieItems) != 0 {
+		t.Fatalf("expected charlie contacts to be empty after reject, got %#v", charlieItems)
 	}
 }
 

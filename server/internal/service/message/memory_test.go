@@ -199,3 +199,67 @@ func TestMemoryServiceAcknowledgeReadSetsReadAndDeliveredTimestamps(t *testing.T
 		t.Fatal("expected read timestamp when marking as read")
 	}
 }
+
+func TestMemoryServiceListConversations(t *testing.T) {
+	service := NewMemoryService()
+	ctx := context.Background()
+
+	_, err := service.Send(ctx, SendInput{
+		MessageID:         "msg_conv_1",
+		ConversationID:    "conv_alpha",
+		SenderUserID:      "usr_a",
+		SenderDeviceID:    "dev_a",
+		SenderEmail:       "alice@example.com",
+		RecipientUserID:   "usr_b",
+		RecipientDeviceID: "dev_b",
+		RecipientEmail:    "bob@example.com",
+		ContentType:       "text/plain",
+		ClientMessageSeq:  1,
+		Body:              "hello bob",
+		RecipientOnline:   true,
+	})
+	if err != nil {
+		t.Fatalf("send alpha failed: %v", err)
+	}
+
+	_, err = service.Send(ctx, SendInput{
+		MessageID:         "msg_conv_2",
+		ConversationID:    "conv_beta",
+		SenderUserID:      "usr_c",
+		SenderDeviceID:    "dev_c",
+		SenderEmail:       "charlie@example.com",
+		RecipientUserID:   "usr_a",
+		RecipientDeviceID: "dev_a",
+		RecipientEmail:    "alice@example.com",
+		ContentType:       "text/plain",
+		ClientMessageSeq:  2,
+		Body:              "hello alice",
+		RecipientOnline:   false,
+	})
+	if err != nil {
+		t.Fatalf("send beta failed: %v", err)
+	}
+
+	conversations, err := service.ListConversations(ctx, "usr_a")
+	if err != nil {
+		t.Fatalf("list conversations failed: %v", err)
+	}
+	if len(conversations) != 2 {
+		t.Fatalf("expected 2 conversations, got %d", len(conversations))
+	}
+	if conversations[0].ConversationID != "conv_beta" {
+		t.Fatalf("expected latest conversation conv_beta, got %q", conversations[0].ConversationID)
+	}
+	if conversations[0].PeerEmail != "charlie@example.com" {
+		t.Fatalf("expected latest peer charlie@example.com, got %q", conversations[0].PeerEmail)
+	}
+	if conversations[0].UnreadCount != 1 {
+		t.Fatalf("expected latest unreadCount 1, got %d", conversations[0].UnreadCount)
+	}
+	if conversations[1].PeerEmail != "bob@example.com" {
+		t.Fatalf("expected second peer bob@example.com, got %q", conversations[1].PeerEmail)
+	}
+	if conversations[1].MessageCount != 1 {
+		t.Fatalf("expected second conversation messageCount 1, got %d", conversations[1].MessageCount)
+	}
+}
